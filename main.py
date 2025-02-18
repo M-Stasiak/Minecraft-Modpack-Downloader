@@ -17,7 +17,12 @@ def progress_bar_downloading(iteration, total, speed, elapsed_time, prefix='', s
     downloaded_mb = iteration / (1024 * 1024)
     total_mb = total / (1024 * 1024)
 
-    sys.stdout.write(f'\r{prefix:<10} [{downloaded_mb:.2f}MB/{total_mb:.2f}MB  {speed:.2f}kB/s  {elapsed_time:.2f}s] |{bar}| {percent}% - {suffix}')
+    if speed >= 1024:
+        speed_display = f"{speed / 1024:.2f} MB/s"
+    else:
+        speed_display = f"{speed:.2f} kB/s"
+
+    sys.stdout.write(f'\r{prefix:<10} [{downloaded_mb:.2f} MB/{total_mb:.2f} MB  {speed_display}  {elapsed_time:.2f}s] |{bar}| {percent}% - {suffix}')
     sys.stdout.flush()
 
 def progress_bar_unzipping(iteration, total, speed, elapsed_time, prefix='', suffix='', bar_length=50, fill='█'):
@@ -131,10 +136,19 @@ def loadJsonFile(json_file_path):
     return None
 
 if __name__ == "__main__":
-    zip_file_path = 'TFCH-1.5.5b.zip'
+    zip_file_path = 'Fabulously Optimized-6.3.1.zip'
     folder_name = os.path.splitext(os.path.basename(zip_file_path))[0]
     unZIP(zip_file_path, folder_name)
 
     json_file_path = f'{folder_name}/manifest.json'
     manifestData = loadJsonFile(json_file_path)
-    print(manifestData)
+    if "files" in manifestData:
+        total_files = len(manifestData["files"])
+        for index, file_entry in enumerate(manifestData["files"], start=1):
+            project_id = int(file_entry.get("projectID", 0))
+            file_id = int(file_entry.get("fileID", 0))
+            required = file_entry.get("required", False)
+            download_CurseForgeMOD(project_id, file_id, index, total_files, f"{folder_name}/overrides/mods")
+    else:
+        print("Brak sekcji 'files' w JSON.")
+    
