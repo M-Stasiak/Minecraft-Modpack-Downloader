@@ -49,7 +49,7 @@ def ModrinthOperation(file_path, folder_name):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="MinecraftModPackDownloader", description="Download mods for modpack")
+    parser = argparse.ArgumentParser(prog="MinecraftModpackDownloader", description="Download mods for modpack")
     parser.add_argument("file", help="Path to .zip / .mrpack file")
 
     group = parser.add_mutually_exclusive_group()
