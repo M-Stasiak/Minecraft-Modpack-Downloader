@@ -1,45 +1,14 @@
 import urllib.request
 import json
 import zipfile
+import argparse
 import shutil
 import time
-import sys
 import os
+from progressBar import progress_bar_downloading, progress_bar_unzipping
 
 URL_CURSEFORGE_INFO = "https://www.curseforge.com/api/v1/mods/{project_id}/files/{file_id}"
 URL_CURSEFORGE_DOWNLOAD = "https://www.curseforge.com/api/v1/mods/{project_id}/files/{file_id}/download"
-
-def progress_bar_downloading(iteration, total, speed, elapsed_time, prefix='', suffix='', bar_length=50, fill='█'):
-    percent = ("{0:.1f}").format(100 * (iteration / float(total)))
-    filled_length = int(bar_length * iteration // total)
-    bar = fill * filled_length + '-' * (bar_length - filled_length)
-
-    downloaded_mb = iteration / (1024 * 1024)
-    total_mb = total / (1024 * 1024)
-
-    if speed >= 1024:
-        speed_display = f"{speed / 1024:.2f} MB/s"
-    else:
-        speed_display = f"{speed:.2f} kB/s"
-
-    sys.stdout.write(f'\r{prefix:<10} [{downloaded_mb:.2f} MB/{total_mb:.2f} MB  {speed_display}  {elapsed_time:.2f}s] |{bar}| {percent}% - {suffix}')
-    sys.stdout.flush()
-
-def progress_bar_unzipping(iteration, total, speed, elapsed_time, prefix='', suffix='', bar_length=50, fill='█'):
-    percent = ("{0:.1f}").format(100 * (iteration / float(total)))
-    filled_length = int(bar_length * iteration // total)
-    bar = fill * filled_length + '-' * (bar_length - filled_length)
-
-    if speed >= 1024:
-        speed_display = f"{speed / 1024:.2f} MB/s"
-    else:
-        speed_display = f"{speed:.2f} kB/s"
-    
-    minutes, seconds = divmod(elapsed_time, 60)
-    elapsed_formatted = f"{int(minutes)}m {int(seconds)}s" if minutes > 0 else f"{elapsed_time:.2f}s"
-
-    sys.stdout.write(f'\r{prefix:<12} [{iteration}/{total}] {percent}% |{bar}| {speed_display}  {elapsed_formatted}     {suffix}')
-    sys.stdout.flush()
 
 def download_CurseForgeMOD(project_id, file_id, fileNumber, totalNumber, folder="mods"):
     url_info = URL_CURSEFORGE_INFO.format(project_id=project_id, file_id=file_id)
@@ -72,12 +41,53 @@ def download_CurseForgeMOD(project_id, file_id, fileNumber, totalNumber, folder=
                     elapsed_time = time.time() - start_time
                     speed = (downloaded_file_size / 1024) / elapsed_time if elapsed_time > 0 else 0
 
-                    progress_bar_downloading(downloaded_file_size, total_file_size, speed, elapsed_time, prefix=f'[{fileNumber}/{totalNumber}]', suffix=f'{fileName}')
+                    progress_bar_downloading(downloaded_file_size, total_file_size, speed, elapsed_time, prefix=f'[{fileNumber}/{totalNumber}]', suffix=f'{fileName}   ')
 
                 out_file.flush()
                 os.fsync(out_file.fileno())
 
-        print(f"  -  Pobrano pomyślnie")
+        print(f"-  Pobrano pomyślnie")
+
+    except urllib.error.HTTPError as e:
+        print(f"Błąd HTTP: {e.code}")
+    except urllib.error.URLError as e:
+        print(f"Błąd URL: {e.reason}")
+    except Exception as e:
+        print(f"Wystąpił błąd: {e}")
+
+def download_ModrinthMOD(url_download, path, fileNumber, totalNumber, folder="mods"):
+    fileName = path.split("/")[-1]
+    path_folder = os.path.dirname(path)
+    final_folder = os.path.join(folder, path_folder)
+
+    # Tworzenie folderu, jeśli nie istnieje
+    if not os.path.exists(final_folder):
+        os.makedirs(final_folder)
+        print(f"Utworzono folder: {final_folder}")
+
+    try:
+        # Pobieranie pliku
+        destination = os.path.join(final_folder, fileName)
+        with urllib.request.urlopen(url_download) as response:
+            total_file_size = int(response.headers.get("Content-Length", 0))
+
+            with open(destination, "w+b") as out_file:
+                downloaded_file_size = 0
+                start_time = time.time()
+
+                for data in response:
+                    out_file.write(data)
+
+                    downloaded_file_size += len(data)
+                    elapsed_time = time.time() - start_time
+                    speed = (downloaded_file_size / 1024) / elapsed_time if elapsed_time > 0 else 0
+
+                    progress_bar_downloading(downloaded_file_size, total_file_size, speed, elapsed_time, prefix=f'[{fileNumber}/{totalNumber}]', suffix=f'{fileName}   ')
+
+                out_file.flush()
+                os.fsync(out_file.fileno())
+
+        print(f"-  Pobrano pomyślnie")
 
     except urllib.error.HTTPError as e:
         print(f"Błąd HTTP: {e.code}")
@@ -136,19 +146,52 @@ def loadJsonFile(json_file_path):
     return None
 
 if __name__ == "__main__":
-    zip_file_path = 'Fabulously Optimized-6.3.1.zip'
-    folder_name = os.path.splitext(os.path.basename(zip_file_path))[0]
-    unZIP(zip_file_path, folder_name)
+    parser = argparse.ArgumentParser(description="Download mods for modpack")
+    parser.add_argument("file", help="Path to .zip / .mrpack file")
 
-    json_file_path = f'{folder_name}/manifest.json'
-    manifestData = loadJsonFile(json_file_path)
-    if "files" in manifestData:
-        total_files = len(manifestData["files"])
-        for index, file_entry in enumerate(manifestData["files"], start=1):
-            project_id = int(file_entry.get("projectID", 0))
-            file_id = int(file_entry.get("fileID", 0))
-            required = file_entry.get("required", False)
-            download_CurseForgeMOD(project_id, file_id, index, total_files, f"{folder_name}/overrides/mods")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--curseforge", action="store_true", help="Flag for downloading mods from CurseForge")
+    group.add_argument("--modrinth", action="store_true", help="Flag for downloading mods from Modrinth")
+
+    args = parser.parse_args()
+    file_path = args.file
+    folder_name = os.path.splitext(os.path.basename(file_path))[0]
+
+    if args.curseforge:
+        unZIP(file_path, folder_name)
+        json_file_path = f'{folder_name}/manifest.json'
+        manifestData = loadJsonFile(json_file_path)
+
+        if "files" in manifestData:
+            total_files = len(manifestData["files"])
+            for index, file_entry in enumerate(manifestData["files"], start=1):
+                project_id = int(file_entry.get("projectID", 0))
+                file_id = int(file_entry.get("fileID", 0))
+                required = file_entry.get("required", False)
+                download_CurseForgeMOD(project_id, file_id, index, total_files, f"{folder_name}/overrides")
+        else:
+            print("Brak sekcji 'files' w JSON.")
+    elif args.modrinth:
+        #zip_path = file_path.replace('.mrpack', '.zip')
+        zip_path = file_path.rsplit('.', 1)[0] + ".zip"
+        shutil.copy2(file_path, zip_path)
+        #os.rename(file_path, zip_path)
+        unZIP(zip_path, folder_name)
+        json_file_path = f'{folder_name}/modrinth.index.json'
+        manifestData = loadJsonFile(json_file_path)
+        if "files" in manifestData:
+            total_files = len(manifestData["files"])
+            for index, file_entry in enumerate(manifestData["files"], start=1):
+                path = file_entry.get("path", "")
+                downloads = file_entry.get("downloads", [])
+
+                if downloads:
+                    download_url = downloads[0]
+                    if not os.path.isabs(path):
+                        download_ModrinthMOD(download_url, path, index, total_files, f"{folder_name}/overrides")
+        else:
+            print("Brak sekcji 'files' w JSON.")
     else:
-        print("Brak sekcji 'files' w JSON.")
+        print("No flag provided. Proceeding without downloading from CurseForge or Modrinth.")
+
     
