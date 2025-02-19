@@ -17,7 +17,7 @@ def CurseForgeOperation(file_path, folder_name):
             project_id = int(file_entry.get("projectID", 0))
             file_id = int(file_entry.get("fileID", 0))
 
-            success = download_CurseForgeMOD(project_id, file_id, index, total_files, f"{folder_name}/overrides")
+            success = download_CurseForgeMOD(project_id, file_id, index, total_files, f"{folder_name}/overrides/mods")
             if success: downloaded = downloaded + 1
     else:
         print("Missing 'files' section in JSON.")
@@ -66,7 +66,6 @@ if __name__ == "__main__":
         ModrinthOperation(file_path, folder_name)
     else:
         file_extension = os.path.splitext(file_path)[1].lower()
-        print(file_extension)
         if file_extension == '.zip':
             CurseForgeOperation(file_path, folder_name)
         elif file_extension == '.mrpack':
